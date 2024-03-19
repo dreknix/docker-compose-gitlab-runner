@@ -1,0 +1,207 @@
+---
+
+# https://taskfile.dev
+
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  GITLAB_PYTHON_CONFIG: .python-gitlab.cfg
+  DOCKER_RUN_GITLAB: docker
+    run
+      -it
+      --rm
+      -v ./{{ .GITLAB_PYTHON_CONFIG }}:/etc/python-gitlab.cfg
+      registry.gitlab.com/python-gitlab/python-gitlab:latest
+
+preconditions:
+  <<: &test-config-file
+    sh: test -f "{{ .GITLAB_PYTHON_CONFIG }}"
+    msg: "File '{{ .GITLAB_PYTHON_CONFIG }}' does not exist"
+
+tasks:
+
+  start:
+    desc: Start all containers
+    cmds:
+      - docker compose up --detach
+
+  stop:
+    desc: Stop all containers
+    cmds:
+      - docker compose down
+
+  pull:
+    desc: Update all containers
+    cmds:
+      - docker compose pull
+
+  systemd_enable:
+    desc: Enable systemd service
+    cmds:
+      - systemctl enable docker-compose@gitlab-runner.service
+      - systemctl start docker-compose@gitlab-runner.service
+
+  systemd_disable:
+    desc: Disable systemd service
+    cmds:
+      - systemctl stop docker-compose@gitlab-runner.service
+      - systemctl disable docker-compose@gitlab-runner.service
+
+  gitlab:api_token:
+    desc: Create API token for creating GitLab runner via GUI
+    vars:
+      GITLAB_TOKEN_NAME:
+        GitLab+runner+token
+      GITLAB_TOKEN_SCOPES:
+        create_runner
+      GITLAB_TOKEN_PARAM:
+        name={{ .GITLAB_TOKEN_NAME }}&scopes={{ .GITLAB_TOKEN_SCOPES }}
+      GITLAB_TOKEN_PATH:
+        -/user_settings/personal_access_tokens?{{ .GITLAB_TOKEN_PARAM }}
+      GITLAB_TOKEN_URL:
+        "{{ .ENV_GITLAB_URL }}/{{ .GITLAB_TOKEN_PATH}}"
+    cmds:
+      - xdg-open "{{ .GITLAB_TOKEN_URL }}"
+
+  gitlab:create-config:
+    desc: Create GitLab Python config (`-- <token>`)
+    preconditions:
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" must be GitLab token'
+    cmds:
+      - cmd: echo "[global]" > "{{ .GITLAB_PYTHON_CONFIG }}"
+      - cmd: echo "default = work" >> "{{ .GITLAB_PYTHON_CONFIG }}"
+      - cmd: echo "" >> "{{ .GITLAB_PYTHON_CONFIG }}"
+      - cmd: echo "[work]" >> "{{ .GITLAB_PYTHON_CONFIG }}"
+      - cmd: echo "url = {{ .ENV_GITLAB_URL }}" >> "{{ .GITLAB_PYTHON_CONFIG }}"
+      - cmd: echo "private_token = {{ .CLI_ARGS }}" >> "{{ .GITLAB_PYTHON_CONFIG }}"
+    silent: true
+
+  gitlab:runner:list:
+    desc: List of GitLab runners
+    preconditions:
+      - *test-config-file
+    cmds:
+      - >-
+          {{ .DOCKER_RUN_GITLAB }}
+          runner list
+
+  gitlab:runner:get:
+    desc: Get info about GitLab runner (`-- <runner-id>`)
+    preconditions:
+      - *test-config-file
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}"'
+    cmds:
+      - >-
+          {{ .DOCKER_RUN_GITLAB }}
+          -o yaml -f id,description,status
+          runner get --id "{{ .CLI_ARGS }}"
+
+  gitlab:runner:get-details:
+    desc: Get details of GitLab runner (`-- <runner-id>`)
+    preconditions:
+      - *test-config-file
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" runner id is missing'
+    cmds:
+      - >-
+          {{ .DOCKER_RUN_GITLAB }}
+          -o yaml -v
+          runner get --id "{{ .CLI_ARGS }}"
+
+  gitlab:runner:create-project:
+    desc: Create GitLab runner for given project (`-- <project-id> [<name>]`)
+    preconditions:
+      - *test-config-file
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting project-id'
+    cmds:
+      - >-
+          {{ .DOCKER_RUN_GITLAB }}
+          -o yaml -f id,token
+          current-user-runner create
+          --runner-type "project_type"
+          --project-id "{{ .PROJECT_ID }}"
+          --description "{{ .DESCRIPTION }}"
+          --paused false
+          --locked false
+          --run-untagged true
+    vars:
+      PROJECT_ID: >-
+        {{ index (splitArgs .CLI_ARGS) 0 }}
+      DESCRIPTION: >-
+        {{ if ge (len (splitArgs .CLI_ARGS)) 2 }}
+          {{ index (splitArgs .CLI_ARGS) 1 }}
+        {{ else }}
+          GitLab runner
+        {{ end }}
+
+  gitlab:runner:create-group:
+    desc: Create GitLab runner for given group (`-- <group-id> [<name>]`)
+    preconditions:
+      - *test-config-file
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting project-id'
+    cmds:
+      - >-
+          {{ .DOCKER_RUN_GITLAB }}
+          -o yaml -f id,token
+          current-user-runner create
+          --runner-type "group_type"
+          --group-id "{{ .GROUP_ID }}"
+          --description "{{ .DESCRIPTION }}"
+          --paused false
+          --locked false
+          --run-untagged true
+    vars:
+      GROUP_ID: >-
+        {{ index (splitArgs .CLI_ARGS) 0 }}
+      DESCRIPTION: >-
+        {{ if ge (len (splitArgs .CLI_ARGS)) 2 }}
+          {{ index (splitArgs .CLI_ARGS) 1 }}
+        {{ else }}
+          GitLab runner
+        {{ end }}
+
+  gitlab:runner:delete:
+    desc: Delete GitLab runner (`-- <runner-id>`)
+    preconditions:
+      - *test-config-file
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}"'
+    cmds:
+      - >-
+          {{ .DOCKER_RUN_GITLAB }}
+          -o yaml
+          runner delete --id "{{ .CLI_ARGS }}"
+
+  gitlab:runner:register:
+    desc: Register GitLab runner (`-- <token> [<default-image>]`)
+    preconditions:
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}"'
+    cmds:
+      - docker compose
+               run
+               --rm
+                 gitlab-runner
+                   register
+                     --url "{{ .ENV_GITLAB_URL }}"
+                     --token "{{ .TOKEN }}"
+                     --non-interactive
+                     --executor "docker"
+                     --docker-image "{{ .DEFAULT_IMAGE }}"
+    vars:
+      TOKEN: >-
+        {{ index (splitArgs .CLI_ARGS) 0 }}
+      DEFAULT_IMAGE: >-
+        {{ if ge (len (splitArgs .CLI_ARGS)) 2 }}
+          {{ index (splitArgs .CLI_ARGS) 1 }}
+        {{ else }}
+          alpine:3.19
+        {{ end }}
+
+...
