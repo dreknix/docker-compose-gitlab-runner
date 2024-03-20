@@ -21,7 +21,7 @@ Get the authentication token of the runner.
 First you need an API token for creating a runner:
 
 ```
-https://gitlab.example.com/-/user_settings/personal_access_tokens?name=GitLab+runner+token&scopes=create_runner
+https://gitlab.example.com/-/user_settings/personal_access_tokens?name=GitLab+runner+token&scopes=read_api,create_runner
 ```
 
 Create the Python GitLab configuration (`.python-gitlab.yml`):

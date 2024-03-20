@@ -51,7 +51,7 @@ tasks:
       GITLAB_TOKEN_NAME:
         GitLab+runner+token
       GITLAB_TOKEN_SCOPES:
-        create_runner
+        read_api,create_runner
       GITLAB_TOKEN_PARAM:
         name={{ .GITLAB_TOKEN_NAME }}&scopes={{ .GITLAB_TOKEN_SCOPES }}
       GITLAB_TOKEN_PATH:
