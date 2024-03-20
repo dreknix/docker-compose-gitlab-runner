@@ -189,7 +189,7 @@ tasks:
       - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
         msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }} expecting token"'
     cmds:
-      - ->
+      - >-
         {{ .DOCKER_RUNNER }} register
         --url '{{ .ENV_GITLAB_URL }}'
         --token '{{ .TOKEN }}'
