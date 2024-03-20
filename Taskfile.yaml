@@ -8,17 +8,18 @@ dotenv: ['.env']
 
 vars:
   GITLAB_PYTHON_CONFIG: .python-gitlab.cfg
-  DOCKER_RUN_GITLAB: docker
+  DOCKER_GITLAB: docker
     run
       -it
       --rm
       -v ./{{ .GITLAB_PYTHON_CONFIG }}:/etc/python-gitlab.cfg
       registry.gitlab.com/python-gitlab/python-gitlab:latest
+  DOCKER_RUNNER: docker compose run --rm gitlab-runner
 
 preconditions:
   <<: &test-config-file
-    sh: test -f "{{ .GITLAB_PYTHON_CONFIG }}"
-    msg: "File '{{ .GITLAB_PYTHON_CONFIG }}' does not exist"
+    sh: test -f '{{ .GITLAB_PYTHON_CONFIG }}'
+    msg: 'File "{{ .GITLAB_PYTHON_CONFIG }}" does not exist'
 
 tasks:
 
@@ -61,9 +62,9 @@ tasks:
       GITLAB_TOKEN_PATH:
         -/user_settings/personal_access_tokens?{{ .GITLAB_TOKEN_PARAM }}
       GITLAB_TOKEN_URL:
-        "{{ .ENV_GITLAB_URL }}/{{ .GITLAB_TOKEN_PATH}}"
+        '{{ .ENV_GITLAB_URL }}/{{ .GITLAB_TOKEN_PATH}}'
     cmds:
-      - xdg-open "{{ .GITLAB_TOKEN_URL }}"
+      - xdg-open '{{ .GITLAB_TOKEN_URL }}'
 
   gitlab:create-config:
     desc: Create GitLab Python config (`-- <token>`)
@@ -71,21 +72,21 @@ tasks:
       - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
         msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" must be GitLab token'
     cmds:
-      - cmd: echo "[global]" > "{{ .GITLAB_PYTHON_CONFIG }}"
-      - cmd: echo "default = work" >> "{{ .GITLAB_PYTHON_CONFIG }}"
-      - cmd: echo "" >> "{{ .GITLAB_PYTHON_CONFIG }}"
-      - cmd: echo "[work]" >> "{{ .GITLAB_PYTHON_CONFIG }}"
-      - cmd: echo "url = {{ .ENV_GITLAB_URL }}" >> "{{ .GITLAB_PYTHON_CONFIG }}"
-      - cmd: echo "private_token = {{ .CLI_ARGS }}" >> "{{ .GITLAB_PYTHON_CONFIG }}"
+      - cmd: echo '[global]' > '{{ .GITLAB_PYTHON_CONFIG }}'
+      - cmd: echo 'default = work' >> '{{ .GITLAB_PYTHON_CONFIG }}'
+      - cmd: echo '' >> '{{ .GITLAB_PYTHON_CONFIG }}'
+      - cmd: echo '[work]' >> '{{ .GITLAB_PYTHON_CONFIG }}'
+      - cmd: echo 'url = {{ .ENV_GITLAB_URL }}' >> '{{ .GITLAB_PYTHON_CONFIG }}'
+      - cmd: echo 'private_token = {{ .CLI_ARGS }}' >> '{{ .GITLAB_PYTHON_CONFIG }}'
     silent: true
 
   gitlab:runner:list:
-    desc: List of GitLab runners
+    desc: List of existing GitLab runners
     preconditions:
       - *test-config-file
     cmds:
       - >-
-          {{ .DOCKER_RUN_GITLAB }}
+          {{ .DOCKER_GITLAB }}
           runner list
 
   gitlab:runner:get:
@@ -96,9 +97,9 @@ tasks:
         msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}"'
     cmds:
       - >-
-          {{ .DOCKER_RUN_GITLAB }}
+          {{ .DOCKER_GITLAB }}
           -o yaml -f id,description,status
-          runner get --id "{{ .CLI_ARGS }}"
+          runner get --id '{{ .CLI_ARGS }}'
 
   gitlab:runner:get-details:
     desc: Get details of GitLab runner (`-- <runner-id>`)
@@ -108,9 +109,9 @@ tasks:
         msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" runner id is missing'
     cmds:
       - >-
-          {{ .DOCKER_RUN_GITLAB }}
+          {{ .DOCKER_GITLAB }}
           -o yaml -v
-          runner get --id "{{ .CLI_ARGS }}"
+          runner get --id '{{ .CLI_ARGS }}'
 
   gitlab:runner:create-project:
     desc: Create GitLab runner for given project (`-- <project-id> [<name>]`)
@@ -120,12 +121,12 @@ tasks:
         msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting project-id'
     cmds:
       - >-
-          {{ .DOCKER_RUN_GITLAB }}
+          {{ .DOCKER_GITLAB }}
           -o yaml -f id,token
           current-user-runner create
-          --runner-type "project_type"
-          --project-id "{{ .PROJECT_ID }}"
-          --description "{{ .DESCRIPTION }}"
+          --runner-type 'project_type'
+          --project-id '{{ .PROJECT_ID }}'
+          --description '{{ .DESCRIPTION }}'
           --paused false
           --locked false
           --run-untagged true
@@ -133,11 +134,11 @@ tasks:
       PROJECT_ID: >-
         {{ index (splitArgs .CLI_ARGS) 0 }}
       DESCRIPTION: >-
-        {{ if ge (len (splitArgs .CLI_ARGS)) 2 }}
+        {{- if ge (len (splitArgs .CLI_ARGS)) 2 -}}
           {{ index (splitArgs .CLI_ARGS) 1 }}
-        {{ else }}
+        {{- else -}}
           GitLab runner
-        {{ end }}
+        {{- end -}}
 
   gitlab:runner:create-group:
     desc: Create GitLab runner for given group (`-- <group-id> [<name>]`)
@@ -147,61 +148,116 @@ tasks:
         msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting project-id'
     cmds:
       - >-
-          {{ .DOCKER_RUN_GITLAB }}
+          {{ .DOCKER_GITLAB }}
           -o yaml -f id,token
           current-user-runner create
-          --runner-type "group_type"
-          --group-id "{{ .GROUP_ID }}"
-          --description "{{ .DESCRIPTION }}"
+          --runner-type 'group_type'
+          --group-id '{{ .GROUP_ID }}'
+          --description '{{ .DESCRIPTION }}'
           --paused false
           --locked false
           --run-untagged true
     vars:
       GROUP_ID: >-
-        {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
+          {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- end -}}
       DESCRIPTION: >-
-        {{ if ge (len (splitArgs .CLI_ARGS)) 2 }}
+        {{- if ge (len (splitArgs .CLI_ARGS)) 2 -}}
           {{ index (splitArgs .CLI_ARGS) 1 }}
-        {{ else }}
+        {{- else -}}
           GitLab runner
-        {{ end }}
+        {{- end -}}
 
   gitlab:runner:delete:
     desc: Delete GitLab runner (`-- <runner-id>`)
     preconditions:
       - *test-config-file
       - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
-        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}"'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }} expecting runner-id"'
     cmds:
       - >-
-          {{ .DOCKER_RUN_GITLAB }}
+          {{ .DOCKER_GITLAB }}
           -o yaml
-          runner delete --id "{{ .CLI_ARGS }}"
+          runner delete --id '{{ .CLI_ARGS }}'
 
-  gitlab:runner:register:
-    desc: Register GitLab runner (`-- <token> [<default-image>]`)
+  runner:register:
+    desc: Register GitLab runner (`-- <token> [name] [<default-image>]`)
     preconditions:
       - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
-        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}"'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }} expecting token"'
     cmds:
-      - docker compose
-               run
-               --rm
-                 gitlab-runner
-                   register
-                     --url "{{ .ENV_GITLAB_URL }}"
-                     --token "{{ .TOKEN }}"
-                     --non-interactive
-                     --executor "docker"
-                     --docker-image "{{ .DEFAULT_IMAGE }}"
+      - ->
+        {{ .DOCKER_RUNNER }} register
+        --url '{{ .ENV_GITLAB_URL }}'
+        --token '{{ .TOKEN }}'
+        {{ .NAME }}
+        --non-interactive
+        --executor 'docker'
+        --docker-image '{{ .DEFAULT_IMAGE }}'
+        --docker-disable-cache
     vars:
       TOKEN: >-
-        {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
+          {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- end -}}
+      NAME: >-
+        {{- if ge (len (splitArgs .CLI_ARGS)) 2 -}}
+          --name '{{ index (splitArgs .CLI_ARGS) 1 }}'
+        {{- end -}}
       DEFAULT_IMAGE: >-
-        {{ if ge (len (splitArgs .CLI_ARGS)) 2 }}
-          {{ index (splitArgs .CLI_ARGS) 1 }}
-        {{ else }}
+        {{- if ge (len (splitArgs .CLI_ARGS)) 3 -}}
+          {{ index (splitArgs .CLI_ARGS) 2 }}
+        {{- else -}}
           alpine:3.19
-        {{ end }}
+        {{- end -}}
+
+  runner:list:
+    desc: List of registered GitLab runners
+    cmds:
+      - >-
+        {{ .DOCKER_RUNNER }} list
+
+  runner:verify:
+    desc: Verify GitLab runner (`-- <name>`)
+    preconditions:
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting name'
+    cmds:
+      - >-
+        {{ .DOCKER_RUNNER }} verify -name '{{ .NAME }}'
+    vars:
+      NAME: >-
+        {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
+          {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- end -}}
+
+  runner:reset-token:
+    desc: Reset token of GitLab runner (`-- <name>`)
+    preconditions:
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting name'
+    cmds:
+      - >-
+        {{ .DOCKER_RUNNER }} reset-token -name '{{ .NAME }}'
+    vars:
+      NAME: >-
+        {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
+          {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- end -}}
+
+  runner:unregister:
+    desc: Unregister GitLab runner (`-- <name>`)
+    preconditions:
+      - sh: '[ "{{ .CLI_ARGS }}" != "" ]'
+        msg: '.CLI_ARGS is not set: "{{ .CLI_ARGS }}" expecting name'
+    cmds:
+      - >-
+        {{ .DOCKER_RUNNER }} unregister -name '{{ .NAME }}'
+    vars:
+      NAME: >-
+        {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
+          {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- end -}}
 
 ...
