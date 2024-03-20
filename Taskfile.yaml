@@ -23,32 +23,27 @@ preconditions:
 
 tasks:
 
-  start:
-    desc: Start all containers
-    cmds:
-      - docker compose up --detach
-
-  stop:
-    desc: Stop all containers
-    cmds:
-      - docker compose down
-
-  pull:
+  docker:pull:
     desc: Update all containers
     cmds:
       - docker compose pull
 
-  systemd_enable:
-    desc: Enable systemd service
+  systemd:enable:
+    desc: Enable systemd service for GitLab runner
     cmds:
       - systemctl enable docker-compose@gitlab-runner.service
       - systemctl start docker-compose@gitlab-runner.service
 
-  systemd_disable:
-    desc: Disable systemd service
+  systemd:disable:
+    desc: Disable systemd service for GitLab runner
     cmds:
       - systemctl stop docker-compose@gitlab-runner.service
       - systemctl disable docker-compose@gitlab-runner.service
+
+  systemd:status:
+    desc: Status of GitLab runner systemd service
+    cmds:
+      - systemctl status docker-compose@gitlab-runner.service
 
   gitlab:api_token:
     desc: Create API token for creating GitLab runner via GUI
@@ -261,5 +256,15 @@ tasks:
         {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
           {{ index (splitArgs .CLI_ARGS) 0 }}
         {{- end -}}
+
+  runner:start:
+    desc: Start GitLab runners
+    cmds:
+      - docker compose up --detach
+
+  runner:stop:
+    desc: Stop GitLab runners
+    cmds:
+      - docker compose down
 
 ...
