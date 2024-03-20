@@ -132,7 +132,9 @@ tasks:
           --run-untagged true
     vars:
       PROJECT_ID: >-
-        {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- if ge (len (splitArgs .CLI_ARGS)) 1 -}}
+          {{ index (splitArgs .CLI_ARGS) 0 }}
+        {{- end -}}
       DESCRIPTION: >-
         {{- if ge (len (splitArgs .CLI_ARGS)) 2 -}}
           {{ index (splitArgs .CLI_ARGS) 1 }}
