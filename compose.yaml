@@ -5,7 +5,7 @@ services:
   # https://hub.docker.com/r/gitlab/gitlab-runner/tags
   gitlab-runner:
     container_name: gitlab-runner
-    image: gitlab/gitlab-runner:alpine3.19-v16.9.1
+    image: gitlab/gitlab-runner:alpine3.19-v16.10.0
     environment:
       TZ: ${ENV_TIMEZONE:-Europe/Berlin}
     volumes:
